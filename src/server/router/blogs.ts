@@ -8,22 +8,43 @@ const blogRouter = createRouter()
       title: z.string(),
       content: z.string(),
       isBlogForPros: z.boolean(),
-      address: z.string()
+      address: z.string(),
+      tokenUri: z.string()
     }),
     async resolve({ input }) {
+      const currentGlobalTokenId = await prisma.global.findFirst({
+        select: {
+          tokenId: true
+        }
+      })
+
       await prisma.blog.create({
         data: {
           title: input.title,
           content: input.content,
           isBlogForPros: input.isBlogForPros,
           tipsCollected: '0',
+          orignalOwner: input.address,
+          tokenUri: input.tokenUri,
           writer: {
             connect: {
               address: input.address
             }
           },
-          topTipper: '',
-          topTipperValue: '0'
+          nft: {
+            create: {
+              tokenId:
+                currentGlobalTokenId?.tokenId === 0
+                  ? 0
+                  : (currentGlobalTokenId?.tokenId as number)
+            }
+          }
+        }
+      })
+
+      await prisma.global.updateMany({
+        data: {
+          tokenId: currentGlobalTokenId?.tokenId! + 1
         }
       })
 
@@ -108,6 +129,34 @@ const blogRouter = createRouter()
       })
 
       return transfers
+    }
+  })
+  .query('getCurrentTokenId', {
+    async resolve() {
+      const tokenId = await prisma.global.findFirst({
+        select: {
+          tokenId: true
+        }
+      })
+
+      return tokenId?.tokenId
+    }
+  })
+  .mutation('updateTokenCounter', {
+    async resolve() {
+      const tokenId = await prisma.global.findFirst({
+        select: {
+          tokenId: true
+        }
+      })
+
+      await prisma.global.updateMany({
+        data: {
+          tokenId: tokenId?.tokenId! + 1
+        }
+      })
+
+      return 'Success ✅'
     }
   })
 

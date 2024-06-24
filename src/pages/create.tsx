@@ -1,20 +1,21 @@
+import { router } from '@trpc/server'
 import type { NextPage } from 'next'
-import { useRouter } from 'next/router'
-import { useEffect, useRef, useState } from 'react'
+import { MutableRefObject, useEffect, useRef, useState } from 'react'
 import { toast } from 'react-hot-toast'
 import useAuth from '../../hooks/useAuth'
+import useStorage from '../../hooks/useStorage'
+import Loading from '../components/Loading'
 import Navbar from '../components/Navbar'
-import { trpc } from '../utils/trpc'
 
-const CreatePage: NextPage = () => {
+interface Props {
+  api_token: string
+}
+
+const CreatePage: NextPage<Props> = (props: Props) => {
   const { account, accountFound, connectWallet } = useAuth()
 
   const [shouldShow, setShouldShow] = useState<boolean>()
   const [isChecked, setIsChecked] = useState<boolean>(false)
-
-  const createPostMutation = trpc.useMutation(['blogs.createBlog'])
-
-  const router = useRouter()
 
   const handleOnChange = () => {
     setIsChecked(!isChecked)
@@ -31,6 +32,14 @@ const CreatePage: NextPage = () => {
     }
   })
 
+  const [loading, setLoading] = useState<boolean>()
+
+  const { createPost } = useStorage()
+
+  if (account && accountFound && loading) return <Loading />
+
+  const nftRef = useRef<any>()
+
   if (shouldShow)
     return (
       <>
@@ -40,7 +49,6 @@ const CreatePage: NextPage = () => {
           <h1 className='mt-48 text-4xl'>
             Create A <span className='font-bold underline'>newweb.io</span> Post
           </h1>
-
           <span className='text-xl font-bold mt-24'>
             Title:{' '}
             <input
@@ -50,7 +58,6 @@ const CreatePage: NextPage = () => {
               className='px-5 ml-2 rounded-lg py-3 font-normal outline-none focus:border-red-200 border-4 border-gray-100'
             />
           </span>
-
           <span className='text-xl font-bold mt-24'>
             <textarea
               ref={contentRef}
@@ -60,6 +67,17 @@ const CreatePage: NextPage = () => {
               className='px-5 ml-2 rounded-lg py-3 font-normal outline-none focus:border-red-200 border-4 border-gray-100'
             />
           </span>
+
+          <div className='mt-4'>
+            <span>File For NFT: </span>
+
+            <input
+              type='file'
+              accept='image/png'
+              ref={nftRef}
+              required
+            />
+          </div>
 
           <div className='flex gap-x-6'>
             {isChecked ? (
@@ -84,22 +102,23 @@ const CreatePage: NextPage = () => {
 
             <button
               onClick={() => {
+                setLoading(true)
+
                 try {
                   if (account && accountFound) {
-                    createPostMutation.mutate({
-                      address: account,
-                      content: contentRef.current?.value as string,
-                      title: titleRef.current?.value as string,
-                      isBlogForPros: isChecked as boolean
-                    })
-
-                    toast.success('Blog Created!')
-
-                    router.replace('/')
+                    createPost(
+                      contentRef.current?.value as string,
+                      titleRef.current?.value as string,
+                      isChecked as boolean,
+                      props.api_token,
+                      nftRef
+                    )
                   }
                 } catch (err) {
                   toast.error('There Was An Error!')
                 }
+
+                setLoading(false)
               }}
               className='bg-red-400 mt-16 text-white px-32 text-md duration-300 transition-all py-5 border-4 rounded-lg hover:bg-transparent hover:text-gray-700 border-red-400'
             >
@@ -120,6 +139,16 @@ const CreatePage: NextPage = () => {
       </button>
     </div>
   )
+}
+
+export const getServerSideProps = (context: any) => {
+  const api_token = process.env.API_TOKEN
+
+  return {
+    props: {
+      api_token
+    }
+  }
 }
 
 export default CreatePage

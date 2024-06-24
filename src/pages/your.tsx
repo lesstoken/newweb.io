@@ -1,11 +1,12 @@
 import type { NextPage } from 'next'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import useAuth from '../../hooks/useAuth'
 import Navbar from '../components/Navbar'
 import { trpc } from '../utils/trpc'
 import { Blog, Transfer } from '@prisma/client'
 import toast from 'react-hot-toast'
 import Link from 'next/link'
+import useRoyalty from '../../hooks/useRoyalty'
 
 const YourPage: NextPage = () => {
   const { account, accountFound, connectWallet, error } = useAuth()
@@ -22,6 +23,8 @@ const YourPage: NextPage = () => {
 
   const [blogs, setBlogs] = useState<Array<Blog>>()
   const [transfers, setTransfers] = useState<Array<Transfer>>()
+
+  const { sell } = useRoyalty()
 
   const [earnedMost, setEarnedMost] = useState<{
     name: string
@@ -43,47 +46,68 @@ const YourPage: NextPage = () => {
     value: 0
   })
 
+  const [done, setDone] = useState<Boolean>()
+
   useEffect(() => {
-    if (
-      getYourBlogsQuery.data &&
-      !getYourBlogsQuery.isLoading &&
-      !getYourBlogsQuery.isError
-    ) {
-      setBlogs(getYourBlogsQuery.data)
-    }
+    if (getYourBlogsQuery.isFetched && getYourTransfers.isFetched) {
+      const doThis = () => {
+        if (
+          getYourBlogsQuery.data &&
+          !getYourBlogsQuery.isLoading &&
+          !getYourBlogsQuery.isError
+        ) {
+          setBlogs(getYourBlogsQuery.data)
+        }
 
-    if (
-      getYourTransfers.data &&
-      !getYourTransfers.isLoading &&
-      !getYourTransfers.isError
-    ) {
-      setTransfers(getYourTransfers.data)
-    }
+        if (
+          getYourTransfers.data &&
+          !getYourTransfers.isLoading &&
+          !getYourTransfers.isError
+        ) {
+          setTransfers(getYourTransfers.data)
+        }
 
-    if (error) {
-      toast.error('Make Sure You Have A Wallet!')
-    }
+        if (error) {
+          toast.error('Make Sure You Have A Wallet!')
+        }
 
-    blogs?.map((blog) => {
-      if (parseFloat(blog.tipsCollected) > earnedMost.value) {
-        setEarnedMost({
-          name: blog.title,
-          link: `/post/${blog.id}`,
-          value: parseFloat(blog.tipsCollected),
-          isForPros: blog.isBlogForPros
+        blogs?.map((blog) => {
+          setDone(false)
+
+          if (parseFloat(blog.tipsCollected) > earnedMost.value) {
+            setEarnedMost({
+              name: blog.title,
+              link: `/post/${blog.id}`,
+              value: parseFloat(blog.tipsCollected),
+              isForPros: blog.isBlogForPros
+            })
+          }
+
+          setDone(true)
+        })
+
+        transfers?.map((transfer) => {
+          setDone(false)
+
+          if (
+            parseFloat(transfer.value) + mostTipper.value >
+            mostTipper.value
+          ) {
+            setMostTipper({
+              address: transfer.from,
+              value: parseFloat(transfer.value) + mostTipper.value
+            })
+          }
+
+          setDone(true)
         })
       }
-    })
 
-    transfers?.map((transfer) => {
-      if (parseFloat(transfer.value) + mostTipper.value > mostTipper.value) {
-        setMostTipper({
-          address: transfer.from,
-          value: parseFloat(transfer.value) + mostTipper.value
-        })
-      }
-    })
-  }, [getYourBlogsQuery, earnedMost, getYourTransfers, mostTipper])
+      doThis()
+    }
+  }, [getYourTransfers.data, getYourBlogsQuery.data, transfers, blogs])
+
+  const [sellAmount, setSellAmount] = useState('')
 
   if (account && accountFound) {
     return (
@@ -130,28 +154,56 @@ const YourPage: NextPage = () => {
           {blogs?.length ? (
             <>
               {blogs?.map((blog) => (
-                <Link
+                <div
                   key={blog.id}
-                  href={`/post/${blog.id}`}
+                  className='p-10 bg-slate-50 m-10 rounded-xl cursor-pointer hover:bg-slate-100'
                 >
-                  <div className='p-10 bg-slate-50 m-10 rounded-xl cursor-pointer hover:bg-slate-100'>
-                    <span className='font-bold'>Name:</span> {blog.title}
-                    <div className='flex justify-end'>
-                      <span className='font-bold mr-1'>By:</span>
-                      {blog.writerAddress === account
-                        ? 'You'
-                        : blog.writerAddress}
-                    </div>
-                    <div className='flex justify-end mt-2'>
-                      <span className='font-bold mr-1'>Is For Pro's:</span>
-                      {blog.isBlogForPros ? 'Yes' : 'No'}
-                    </div>
-                    <span className='font-bold'>
+                  <Link href={`/post/${blog.id}`}>
+                    <a>
+                      <span className='font-bold'>Name:</span> {blog.title}
+                    </a>
+                  </Link>
+                  <div className='flex justify-end'>
+                    <span className='font-bold mr-1'>By:</span>
+                    {blog.writerAddress === account
+                      ? 'You'
+                      : blog.writerAddress}
+                  </div>
+                  <div className='flex justify-end mt-2'>
+                    <span className='font-bold mr-1'>Is For Pro's:</span>
+                    {blog.isBlogForPros ? 'Yes' : 'No'}
+                  </div>
+                  <div className='flex justify-end mt-2'>
+                    <span className='font-bold mr-1'>
                       Your Earnings From This Blog:
                     </span>{' '}
-                    {blog.tipsCollected}
+                    {blog.tipsCollected} MATIC
                   </div>
-                </Link>
+                  {!blog.isSell ? (
+                    <div className='flex justify-end mt-3'>
+                      <input
+                        onChange={(event) => setSellAmount(event.target.value)}
+                        type='text'
+                        placeholder='Sell Amount'
+                        className='px-5 rounded-lg py-3 font-normal outline-none focus:border-red-200 border-4 border-gray-100'
+                      />
+
+                      <button
+                        onClick={() => sell(blog.id, sellAmount)}
+                        className='bg-red-400 ml-3 text-white px-32 text-md duration-300 transition-all py-5 border-4 rounded-lg hover:bg-transparent hover:text-gray-700 border-red-400'
+                      >
+                        Sell
+                      </button>
+                    </div>
+                  ) : (
+                    <div className='flex justify-end mt-2'>
+                      <span className='font-bold mr-1'>
+                        You Are Selling This For:
+                      </span>
+                      {blog.sellAmount} MATIC
+                    </div>
+                  )}
+                </div>
               ))}
             </>
           ) : (

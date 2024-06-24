@@ -16,6 +16,7 @@ model User {
   totalEarnings Float
 }
 
+
 model Blog {
   id String @id @default(cuid())
   writer User @relation(fields: [writerAddress], references: [address])
@@ -25,6 +26,12 @@ model Blog {
   isBlogForPros Boolean
   tipsCollected String
   transfers Transfer[]
+  isSell Boolean @default(false)
+  orignalOwner String @default("")
+  sellAmount Float @default(0)
+  nft Nft @relation(fields: [nftTokenId], references: [tokenId])
+  nftTokenId Float @unique
+  tokenUri String 
 }
 
 model Transfer {
@@ -36,4 +43,16 @@ model Transfer {
   link String
   blog Blog @relation(fields: [blogId], references: [id])
   blogId String
+}
+
+model Nft {
+  id String @id @default(cuid())
+  tokenId Float @unique
+  contractAddress String @default("0xC1c10366412Dc6A7dfbcD377a6A8787504A667b3")
+  blog Blog?
+}
+  
+model Global {
+  id String @id @default(cuid())
+  tokenId Float
 }
